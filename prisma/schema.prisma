@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Subscriber {
+  id        Int      @id @default(autoincrement())
+  phone     String   @unique
+  verified  Boolean  @default(false)
+  cityName  String?
+  cityLat   Float?
+  cityLng   Float?
+  rangeKm   Int      @default(10)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OtpToken {
+  id        Int      @id @default(autoincrement())
+  phone     String
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model SentAlert {
+  id       Int      @id @default(autoincrement())
+  alertId  String
+  phone    String
+  sentAt   DateTime @default(now())
+
+  @@unique([alertId, phone])
+}
