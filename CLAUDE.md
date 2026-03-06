@@ -27,8 +27,7 @@ The app sends real time alerts on missile or drone attacks which are in vicinity
    - WhatsApp confirmation sent to the user's number
 3. **Single location per phone number** (to be extended in future). Updating location does not require re-verification.
 4. **Alert monitoring:** Background worker polls `https://www.oref.org.il/WarningMessages/alert/alerts.json` every 5 seconds. On each new alert:
-   - Skip if alert data contains "הסתיים" or "מבזק" (substring match)
-   - Skip if alert type does not contain "חדירת כלי טיס עוין" or "ירי רקטות" (substring match; these strings may drift over time)
+   - Skip if alert data contains "הסתיים" or "מבזק" (substring match) — all other alert types are considered relevant
    - For each active subscriber: compute Haversine distance between user's city centroid and alert city centroid. If distance ≤ vicinity range → send yellow alert via WhatsApp.
    - No batching or rate limiting — each HFC alert triggers a separate WhatsApp message (urgency takes priority)
 5. **Deduplication:** Sent alerts are persisted to SQLite. On restart, already-sent alerts are not re-sent.
@@ -59,7 +58,7 @@ Subscription confirmation WhatsApp message:
 > "You are now subscribed to Yellow Alert for [City Name] with a range of [X] km. Reply STOP to pause alerts."
 
 Alert message:
-> "Yellow Alert! חדירת כלי טיס עוין in [location name], approximately [X] km from your location."
+> "Yellow Alert! [alert type] in [location name], approximately [X] km from your location."
 
 ## External Services / APIs
 1. HFC alerts: `oref.org.il` REST API (no auth required, public)
