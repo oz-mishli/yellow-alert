@@ -8,25 +8,16 @@ datasource db {
 }
 
 model Subscriber {
-  id        Int      @id @default(autoincrement())
-  phone     String   @unique
-  verified  Boolean  @default(false)
-  cityName  String?
-  cityLat   Float?
-  cityLng   Float?
-  rangeKm   Int      @default(10)
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model OtpToken {
-  id        Int      @id @default(autoincrement())
-  phone     String
-  code      String
-  expiresAt DateTime
-  used      Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id              Int      @id @default(autoincrement())
+  phone           String   @unique
+  expoPushToken   String?
+  cityName        String?
+  cityLat         Float?
+  cityLng         Float?
+  rangeKm         Int      @default(10)
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 model SentAlert {
