@@ -5,37 +5,43 @@ The app sends real time alerts on missile or drone attacks which are in vicinity
 
 
 ## Tech Stack
+
+### Mobile App
+- **Framework:** Expo (React Native) — iOS first, Android-ready from day one
 - **Language:** TypeScript
-- **Framework:** Next.js 14 (App Router) — full-stack, web UI + API routes
+- **Push notifications:** Expo Notifications → APNs (iOS) / FCM (Android) — free
+- **Distribution (alpha):** TestFlight
+
+### Backend
+- **Framework:** Next.js 14 (App Router) — API routes only (no web UI for end users)
+- **Language:** TypeScript
 - **Database:** SQLite via Prisma — zero-ops for local alpha, easy to migrate to Postgres later
-- **Auth:** Custom — WhatsApp OTP via Baileys (no third-party auth service)
-- **WhatsApp:** Baileys (open-source WhatsApp Web client) — free, alpha only; migrate to Twilio for production
-- **Styling:** Tailwind CSS
+- **Auth:** None for alpha — phone number is entered by the user, unverified. Acceptable for a small trusted group.
 - **Deployment:** Local laptop for alpha; cloud server after alpha
 - **Other libs:** Zod (validation), Haversine (distance calculation)
 
 ## Architecture
-- **Next.js app** serves the web UI and API routes
-- **Background worker** (Node.js process alongside Next.js) polls the HFC API every 5 seconds, detects new alerts, and dispatches WhatsApp messages via Baileys
-- **Baileys** connects to a dedicated WhatsApp number via QR code scan at startup; handles both outbound alerts and inbound STOP/START commands
-- **SQLite DB** stores subscribers (phone, location, range, status) and a sent-alerts log for deduplication
+- **Expo mobile app** handles all end-user interaction: phone entry, city/range selection, push notification registration, pause/resume
+- **Next.js backend** exposes REST API consumed by the mobile app, and runs the HFC background worker in the same process
+- **Background worker** (co-located with Next.js via custom server.ts) polls the HFC API every 5 seconds, detects new alerts, and dispatches push notifications via Expo Push API
+- **SQLite DB** stores subscribers (phone, Expo push token, location, range, status) and a sent-alerts log for deduplication
 
 ## Core Features (prioritized)
-1. **Phone verification:** User enters their Israeli phone number on the web page. An OTP is sent to them via WhatsApp (using Baileys). User types the OTP into the web form to verify.
-2. **Location setup:** After verification, user selects their city from a dropdown of all HFC cities/zones + sets a vicinity range in km (default: 10 km). On submission:
-   - Web page shows confirmation message
-   - WhatsApp confirmation sent to the user's number
-3. **Single location per phone number** (to be extended in future). Updating location does not require re-verification.
+1. **Onboarding:** User opens the app and enters their Israeli phone number (unverified for alpha). App requests push notification permission and registers the device's Expo push token with the backend.
+2. **Location setup:** User selects their city from a dropdown of all HFC cities/zones + sets a vicinity range in km (default: 10 km). On submission, backend stores the subscription.
+3. **Single location per device/phone** (to be extended in future). Updating location does not require re-onboarding.
 4. **Alert monitoring:** Background worker polls `https://www.oref.org.il/WarningMessages/alert/alerts.json` every 5 seconds. On each new alert:
    - Skip if alert data contains "הסתיים" or "מבזק" (substring match) — all other alert types are considered relevant
-   - For each active subscriber: compute Haversine distance between user's city centroid and alert city centroid. If distance ≤ vicinity range → send yellow alert via WhatsApp.
-   - No batching or rate limiting — each HFC alert triggers a separate WhatsApp message (urgency takes priority)
+   - For each active subscriber: compute Haversine distance between user's city centroid and alert city centroid. If distance ≤ vicinity range → send push notification via Expo Push API.
+   - No batching or rate limiting — each HFC alert triggers a separate notification (urgency takes priority)
 5. **Deduplication:** Sent alerts are persisted to SQLite. On restart, already-sent alerts are not re-sent.
-6. **STOP / START:** If a subscriber replies "STOP" to the WhatsApp number, their subscription is paused (not deleted). Reply "START" resumes it. Web UI reflects current status (active/paused).
+6. **Pause / Resume:** In-app toggle to pause or resume alerts. Backend marks subscription as active/paused accordingly.
 
-## Alert Message Format
+## Push Notification Format
+**Title:** `Yellow Alert`
+**Body:**
 ```
-Yellow Alert! <Alert type> in <location name>, approximately <X> km from your location.
+<Alert type> in <location name>, approximately <X> km from your location.
 ```
 - Distance is rounded to the nearest integer
 - "approximately" is always included
@@ -49,30 +55,29 @@ Yellow Alert! <Alert type> in <location name>, approximately <X> km from your lo
 
 ## Out of Scope
 - Alerts that are not yellow (i.e. alert is at user's own location)
-- App installed on end-user device — all communication via WhatsApp
+- Phone number verification for alpha
 - Polygon/edge-based distance (centroid-to-centroid is used)
-- Per-user alert history visible in web UI (deduplication log is operational only)
+- Per-user alert history in the app (deduplication log is operational only)
 
 ## Input / Output Examples
-Subscription confirmation WhatsApp message:
-> "You are now subscribed to Yellow Alert for [City Name] with a range of [X] km. Reply STOP to pause alerts."
-
-Alert message:
-> "Yellow Alert! [alert type] in [location name], approximately [X] km from your location."
+Push notification on alert:
+> **Title:** Yellow Alert
+> **Body:** [alert type] in [location name], approximately [X] km from your location.
 
 ## External Services / APIs
 1. HFC alerts: `oref.org.il` REST API (no auth required, public)
-2. WhatsApp: Baileys (open-source, connects via QR scan to a dedicated WhatsApp number)
+2. Push notifications: Expo Push API → APNs (iOS) / FCM (Android) — free, no dedicated number needed
 
 ## Acceptance Criteria
-- [ ] User can verify Israeli phone number via WhatsApp OTP
-- [ ] User can select city and range; confirmation sent on web + WhatsApp
+- [ ] User can enter phone number and select city + range in the app
+- [ ] App registers for push notifications and sends Expo push token to backend
 - [ ] Background worker detects new HFC alerts within 10 seconds
-- [ ] Yellow alerts sent only for matching alert types and in-range subscribers
+- [ ] Yellow alerts sent only for in-range subscribers as push notifications
 - [ ] No duplicate alerts sent after server restart
-- [ ] STOP pauses subscription; START resumes it; web UI reflects status
+- [ ] In-app pause/resume toggle works; backend reflects status
 
 ## Constraints
 - Server runs locally on laptop for alpha (assumed always-on during active periods)
-- Baileys requires a dedicated phone number (not used for personal WhatsApp)
-- Baileys violates WhatsApp ToS — acceptable for alpha, must migrate to official API (e.g. Twilio) for production
+- Expo push notifications are free and work without a dedicated phone number
+- Apple Developer account required for TestFlight distribution ($99/yr)
+- For production (post-alpha): move backend to cloud server; Expo push service continues to work as-is
