@@ -1,44 +1,83 @@
 # Yellow Alert Project Brief
 
 ## Goal
-The app sends real time alerts on missle or drone attacks which are in vicinity to a selected location, but not currently in that location (i.e. Yellow alert). The attacks are reported by Israeli HomeFrontCommand (HFC) app. Users for this app are people based in Israeli, primarily during times of war. It solves the problem of being aware that an attack is taking place near by your current location, but not in your current location right now (if it would, you would have received an alert from HFC). That way, you wouldn't be surprised when you hear loud explostions nearby or you will get a heads up before the threat (and the siren) finally gets to your location (mostly relevant for drone attacks that progress slowly and in unexpected trajectory). 
+The app sends real time alerts on missile or drone attacks which are in vicinity to a selected location, but not currently in that location (i.e. Yellow alert). The attacks are reported by Israeli HomeFrontCommand (HFC) app. Users for this app are people based in Israel, primarily during times of war. It solves the problem of being aware that an attack is taking place nearby your current location, but not in your current location right now (if it would, you would have received an alert from HFC). That way, you wouldn't be surprised when you hear loud explosions nearby, or you will get a heads up before the threat (and the siren) finally gets to your location (mostly relevant for drone attacks that progress slowly and in unexpected trajectory).
 
 
 ## Tech Stack
-- **Language:** e.g. TypeScript
-- **Framework:** e.g. Next.js 14
-- **Database:** e.g. Supabase (Postgres)
-- **Auth:** e.g. Supabase Auth
-- **Styling:** e.g. Tailwind CSS
-- **Deployment:** e.g. Vercel
-- **Other libs:** e.g. Stripe, Resend, Zod
+
+### Mobile App
+- **Framework:** Expo (React Native) — iOS first, Android-ready from day one
+- **Language:** TypeScript
+- **Push notifications:** Expo Notifications → APNs (iOS) / FCM (Android) — free
+- **Distribution (alpha):** TestFlight
+
+### Backend
+- **Framework:** Next.js 14 (App Router) — API routes only (no web UI for end users)
+- **Language:** TypeScript
+- **Database:** SQLite via Prisma — zero-ops for local alpha, easy to migrate to Postgres later
+- **Auth:** None for alpha — phone number is entered by the user, unverified. Acceptable for a small trusted group.
+- **Deployment:** Local laptop for alpha; cloud server after alpha
+- **Other libs:** Zod (validation), Haversine (distance calculation)
+
+## Architecture
+- **Expo mobile app** handles all end-user interaction: phone entry, city/range selection, push notification registration, pause/resume
+- **Next.js backend** exposes REST API consumed by the mobile app, and runs the HFC background worker in the same process
+- **Background worker** (co-located with Next.js via custom server.ts) polls the HFC API every 5 seconds, detects new alerts, and dispatches push notifications via Expo Push API
+- **SQLite DB** stores subscribers (phone, Expo push token, location, range, status) and a sent-alerts log for deduplication
 
 ## Core Features (prioritized)
-1. On the web page, the user logs in by sharing submitting their phone numbe (must be Israeli). There is a verification of the number using WhatsApp
-2. After 1 is successful, the user is asked to add their location. The location should include dropdown of all cities and villages in Israel (similar to HFC site) + vicinity range in kilometers (default is 10). Then the form is submitted, and organge alerts are active. The user should get approriate confirmation message in the website after submission. Then, a confirmation message of the subscription should also be sent to the WhatsApp number. 
-3. For now, only a single location is allowed per phone number. This is likely to be extended in the future. 
-4. The backend service should monitor all alerts from HFC in realtime, and send yellow alerts via WhatsApp for each of the registered phone numbers. The logic for sending a yellow alert should be run on every new HFC alert sent of types that represent "חדירת כלי טיס עוין" or ״ירי רקטות״:
-    if distance in km between user location to alert location is equal or smaller to vicinty range then send yellow alert. Otherwise, do nothing. 
+1. **Onboarding:** User opens the app and enters their Israeli phone number (unverified for alpha). App requests push notification permission and registers the device's Expo push token with the backend.
+2. **Location setup:** User selects their city from a dropdown of all HFC cities/zones + sets a vicinity range in km (default: 10 km). On submission, backend stores the subscription.
+3. **Single location per device/phone** (to be extended in future). Updating location does not require re-onboarding.
+4. **Alert monitoring:** Background worker polls `https://www.oref.org.il/WarningMessages/alert/alerts.json` every 5 seconds. On each new alert:
+   - Skip if alert data contains "הסתיים" or "מבזק" (substring match) — all other alert types are considered relevant
+   - For each active subscriber: compute Haversine distance between user's city centroid and alert city centroid. If distance ≤ vicinity range → send push notification via Expo Push API.
+   - No batching or rate limiting — each HFC alert triggers a separate notification (urgency takes priority)
+5. **Deduplication:** Sent alerts are persisted to SQLite. On restart, already-sent alerts are not re-sent.
+6. **Pause / Resume:** In-app toggle to pause or resume alerts. Backend marks subscription as active/paused accordingly.
 
+## Push Notification Format
+**Title:** `Yellow Alert`
+**Body:**
+```
+<Alert type> in <location name>, approximately <X> km from your location.
+```
+- Distance is rounded to the nearest integer
+- "approximately" is always included
+
+## HFC Data Source
+- **Endpoint:** `https://www.oref.org.il/WarningMessages/alert/alerts.json`
+- **Polling interval:** 5 seconds
+- **Alert type matching:** substring/contains (case-sensitive Hebrew)
+- **Location mapping:** Static JSON mapping of HFC Hebrew city/zone names → `{lat, lng}` centroid coordinates, built from Israeli CBS open data
+- **Distance method:** Haversine (straight-line) between city centroids
 
 ## Out of Scope
-This app doesn't send any alert which is not yellow
-There is no app installed on the end user's device, all communication is via the user's WhatsApp app which is assumed to be installed. 
+- Alerts that are not yellow (i.e. alert is at user's own location)
+- Phone number verification for alpha
+- Polygon/edge-based distance (centroid-to-centroid is used)
+- Per-user alert history in the app (deduplication log is operational only)
 
 ## Input / Output Examples
-How alert looks like:
-"Yellow Alert! Alert <Alert type> is in <location name> which is <x> Kms from your location"
-
+Push notification on alert:
+> **Title:** Yellow Alert
+> **Body:** [alert type] in [location name], approximately [X] km from your location.
 
 ## External Services / APIs
-1. Get real time HFC alerts (either from HFC website in JSON format, or from a telegram channel sending RT alerts based on HFC feed)
-2. Send the yellow alert to the user to their WhatsApp (everybody in Israel use it)
+1. HFC alerts: `oref.org.il` REST API (no auth required, public)
+2. Push notifications: Expo Push API → APNs (iOS) / FCM (Android) — free, no dedicated number needed
 
 ## Acceptance Criteria
-<!-- How you'll know when it's done -->
-- [ ] 
-- [ ] 
+- [ ] User can enter phone number and select city + range in the app
+- [ ] App registers for push notifications and sends Expo push token to backend
+- [ ] Background worker detects new HFC alerts within 10 seconds
+- [ ] Yellow alerts sent only for in-range subscribers as push notifications
+- [ ] No duplicate alerts sent after server restart
+- [ ] In-app pause/resume toggle works; backend reflects status
 
 ## Constraints
-The server will be run locally on my laptop for the alpha version 
-
+- Server runs locally on laptop for alpha (assumed always-on during active periods)
+- Expo push notifications are free and work without a dedicated phone number
+- Apple Developer account required for TestFlight distribution ($99/yr)
+- For production (post-alpha): move backend to cloud server; Expo push service continues to work as-is
