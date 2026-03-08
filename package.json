@@ -12,8 +12,6 @@
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
-    "@react-native-community/slider": "^5.1.2",
-    "@whiskeysockets/baileys": "^7.0.0-rc.9",
     "dotenv": "^17.3.1",
     "expo-server-sdk": "^6.0.0",
     "haversine-distance": "^1.2.4",
