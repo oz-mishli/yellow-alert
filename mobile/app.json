@@ -20,7 +20,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.yellowalert.app"
@@ -29,7 +30,6 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/notification-icon.png",
           "color": "#EAB308",
           "defaultChannel": "default"
         }
