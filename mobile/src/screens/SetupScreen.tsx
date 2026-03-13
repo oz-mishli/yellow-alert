@@ -10,8 +10,9 @@ import {
   TextInput,
   Modal,
 } from "react-native";
-import Slider from "@react-native-community/slider";
 import { api } from "../lib/api";
+
+const RANGE_OPTIONS = [5, 10, 20, 50, 100];
 
 interface Props {
   phone: string;
@@ -25,7 +26,9 @@ export default function SetupScreen({ phone, pushToken, initialCity, initialRang
   const [cities, setCities] = useState<string[]>([]);
   const [filteredCities, setFilteredCities] = useState<string[]>([]);
   const [cityName, setCityName] = useState(initialCity ?? "");
-  const [rangeKm, setRangeKm] = useState(initialRange ?? 10);
+  const [rangeKm, setRangeKm] = useState(
+    RANGE_OPTIONS.includes(initialRange ?? 10) ? (initialRange ?? 10) : 10
+  );
   const [loading, setLoading] = useState(false);
   const [loadingCities, setLoadingCities] = useState(true);
   const [pickerVisible, setPickerVisible] = useState(false);
@@ -46,9 +49,7 @@ export default function SetupScreen({ phone, pushToken, initialCity, initialRang
   function handleSearch(text: string) {
     setSearch(text);
     setFilteredCities(
-      text.trim() === ""
-        ? cities
-        : cities.filter((c) => c.includes(text))
+      text.trim() === "" ? cities : cities.filter((c) => c.includes(text))
     );
   }
 
@@ -89,33 +90,26 @@ export default function SetupScreen({ phone, pushToken, initialCity, initialRang
         <Text style={styles.subtitle}>Choose your location and alert range.</Text>
 
         <Text style={styles.label}>Your city</Text>
-        <TouchableOpacity
-          style={styles.picker}
-          onPress={() => setPickerVisible(true)}
-        >
+        <TouchableOpacity style={styles.picker} onPress={() => setPickerVisible(true)}>
           <Text style={cityName ? styles.pickerValue : styles.pickerPlaceholder}>
             {cityName || "Select a city…"}
           </Text>
           <Text style={styles.pickerChevron}>›</Text>
         </TouchableOpacity>
 
-        <Text style={styles.label}>
-          Alert range: <Text style={styles.rangeValue}>{rangeKm} km</Text>
-        </Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={5}
-          maximumValue={100}
-          step={5}
-          value={rangeKm}
-          onValueChange={(v) => setRangeKm(Math.round(v))}
-          minimumTrackTintColor="#EAB308"
-          maximumTrackTintColor="#E5E7EB"
-          thumbTintColor="#EAB308"
-        />
-        <View style={styles.sliderLabels}>
-          <Text style={styles.sliderLabel}>5 km</Text>
-          <Text style={styles.sliderLabel}>100 km</Text>
+        <Text style={styles.label}>Alert range</Text>
+        <View style={styles.rangeRow}>
+          {RANGE_OPTIONS.map((km) => (
+            <TouchableOpacity
+              key={km}
+              style={[styles.rangeBtn, rangeKm === km && styles.rangeBtnActive]}
+              onPress={() => setRangeKm(km)}
+            >
+              <Text style={[styles.rangeBtnText, rangeKm === km && styles.rangeBtnTextActive]}>
+                {km} km
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
         <TouchableOpacity
@@ -183,7 +177,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 26, fontWeight: "700", color: "#CA8A04", marginBottom: 6 },
   subtitle: { fontSize: 14, color: "#6B7280", marginBottom: 24 },
   label: { fontSize: 14, fontWeight: "600", color: "#374151", marginBottom: 8 },
-  rangeValue: { color: "#EAB308", fontWeight: "700" },
   picker: {
     borderWidth: 1,
     borderColor: "#D1D5DB",
@@ -198,9 +191,25 @@ const styles = StyleSheet.create({
   pickerValue: { fontSize: 16, color: "#111827" },
   pickerPlaceholder: { fontSize: 16, color: "#9CA3AF" },
   pickerChevron: { fontSize: 20, color: "#9CA3AF" },
-  slider: { width: "100%", marginBottom: 4 },
-  sliderLabels: { flexDirection: "row", justifyContent: "space-between", marginBottom: 24 },
-  sliderLabel: { fontSize: 12, color: "#9CA3AF" },
+  rangeRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 24,
+  },
+  rangeBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    alignItems: "center",
+  },
+  rangeBtnActive: {
+    backgroundColor: "#EAB308",
+    borderColor: "#EAB308",
+  },
+  rangeBtnText: { fontSize: 13, color: "#6B7280", fontWeight: "500" },
+  rangeBtnTextActive: { color: "#fff", fontWeight: "700" },
   button: {
     backgroundColor: "#EAB308",
     borderRadius: 10,
